@@ -1,0 +1,147 @@
+#!/bin/bash
+
+
+_{%= name %}_help_message() {
+  cat << END
+Usage: ./{%= name %} COMMAND
+
+Available commands:
+  up        Start development server
+  mount     Mount sources from development server
+  umount    Umount sources
+  down      Stop development server
+  deploy    Deploy project to digitalocean
+  cleanup   Remove all generated files
+END
+}
+
+
+_{%= name %}_check_ssh_key() {
+  if [ -f data_bags/nodejs_project/settings.json ]; then
+    return
+  fi
+
+  ssh-keygen -f .id_deploy -N "" -C "generated development server key"
+  mkdir -p data_bags/nodejs_project
+  echo '{"id":"settings","deploy_key":"'"$(perl -pe 's/\n/\\n/' .id_deploy)"'"}' > data_bags/nodejs_project/settings.json
+  curl -u {%= github_username %} -d '{"title":"generated development server key","key":"'"$(cat .id_deploy.pub)"'"}' "https://api.github.com/repos/{%= github_repo %}/keys"
+  rm .id_deploy .id_deploy.pub
+}
+
+
+_{%= name %}_check_cookbooks() {
+  if [ -d cookbooks ]; then
+    return
+  fi
+
+  berks install --path=cookbooks
+}
+
+
+_{%= name %}_check_box() {
+  if [ -f packer_virtualbox-iso_virtualbox.box ]; then
+    return
+  fi
+
+  packer build --only=virtualbox-iso packer.json
+}
+
+
+_{%= name %}_check_digitalocean_credentials() {
+  if [ -f .digitalocean_credentials ]; then
+    return
+  fi
+
+  read -p "Enter digitalocean client id: " client_id
+  read -p "Enter digitalocean api key: " api_key
+
+  cat << END > .digitalocean_credentials
+DIGITALOCEAN_CLIENT_ID=$client_id
+DIGITALOCEAN_API_KEY=$api_key
+END
+}
+
+
+_{%= name %}_up() {
+  _{%= name %}_check_ssh_key
+  _{%= name %}_check_cookbooks
+  _{%= name %}_check_box
+
+  vagrant up
+}
+
+_{%= name %}_mount() {
+  if [ ! -d sources ]; then
+    mkdir -p sources
+    mount -t nfs "{%= ip_address %}:/home/vagrant/{%= name %}/project" sources
+  fi
+}
+
+
+_{%= name %}_umount() {
+  if [ -d sources ]; then
+    umount sources
+    rm -rf sources
+  fi
+}
+
+
+_{%= name %}_down() {
+  _{%= name %}_umount
+  vagrant halt
+}
+
+
+_{%= name %}_deploy() {
+  _{%= name %}_check_ssh_key
+  _{%= name %}_check_cookbooks
+  _{%= name %}_check_digitalocean_credentials
+
+  . .digitalocean_credentials
+
+  DIGITALOCEAN_CLIENT_ID="$DIGITALOCEAN_CLIENT_ID" DIGITALOCEAN_API_KEY="$DIGITALOCEAN_API_KEY" packer build -only=digitalocean packer.json
+}
+
+
+_{%= name %}_cleanup() {
+  vagrant destroy
+
+  rm -rf .vagrant cookbooks data_bags/nodejs_project/settings.json output-virtualbox-iso packer_cache .digitalocean_credentials .id_deploy .id_deploy.pub Berksfile.lock packer_virtualbox-iso_virtualbox.box
+
+  if [ "x$(ls data_bags/nodejs_project)" == "x" ]; then
+    rm -r data_bags/nodejs_project
+  fi
+
+  if [ "x$(ls data_bags)" == "x" ]; then
+    rm -r data_bags
+  fi
+}
+
+
+_{%= name %}_main() {
+  cd "$(dirname $0)"
+
+  command="$1"
+
+  if [ "x$command" == "x" ]; then
+    _{%= name %}_help_message
+  elif [ "x$command" == "xup" ]; then
+    _{%= name %}_up
+  elif [ "x$command" == "xmount" ]; then
+    _{%= name %}_mount
+  elif [ "x$command" == "xumount" ]; then
+    _{%= name %}_umount
+  elif [ "x$command" == "xdown" ]; then
+    _{%= name %}_down
+  elif [ "x$command" == "xdeploy" ]; then
+    _{%= name %}_deploy
+  elif [ "x$command" == "xcleanup" ]; then
+    _{%= name %}_cleanup
+  else
+    _{%= name %}_help_message
+    exit 1
+  fi
+}
+
+
+_{%= name %}_main $*

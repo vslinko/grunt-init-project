@@ -1,0 +1,11 @@
+/.vagrant/
+/cookbooks/
+/data_bags/nodejs_project/settings.json
+/output-virtualbox-iso/
+/packer_cache/
+/sources/
+/.digitalocean_credentials
+/.id_deploy
+/.id_deploy.pub
+/Berksfile.lock
+/packer_virtualbox-iso_virtualbox.box

@@ -1,0 +1,168 @@
+{
+  "builders": [
+    {
+      "type": "virtualbox-iso",
+
+      "iso_checksum": "e83adb9af4ec0a039e6a5c6e145a34de",
+      "iso_checksum_type": "md5",
+      "iso_url": "http://releases.ubuntu.com/12.04/ubuntu-12.04.4-server-amd64.iso",
+
+      "http_directory": "lib/preseed",
+
+      "vm_name": "{%= name %}",
+      "guest_os_type": "Ubuntu_64",
+      "headless": true,
+      "disk_size": 30720,
+      "vboxmanage": [
+        ["modifyvm", "{{.Name}}", "--memory", "1024"],
+        ["modifyvm", "{{.Name}}", "--cpus", "1"]
+      ],
+
+      "boot_command": [
+        "<esc><esc><enter><wait>",
+        "/install/vmlinuz ",
+        "noapic ",
+        "initrd=/install/initrd.gz ",
+        "locale=en_US ",
+        "console-setup/ask_detect=false ",
+        "keyboard-configuration/layout=USA ",
+        "keyboard-configuration/variant=USA ",
+        "preseed/url=http://{{.HTTPIP}}:{{.HTTPPort}}/preseed.cfg ",
+        "hostname={{.Name}} ",
+        "<enter>"
+      ],
+
+      "ssh_username": "vagrant",
+      "ssh_password": "vagrant",
+
+      "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now"
+    },
+    {
+      "type": "digitalocean",
+
+      "region_id": 5,
+      "size_id": 63,
+
+      "droplet_name": "{%= name %}-build",
+      "snapshot_name": "{%= name %}-{{timestamp}}"
+    }
+  ],
+
+  "provisioners": [
+    {
+      "type": "shell",
+
+      "script": "lib/scripts/virtualbox-iso-setup.sh",
+
+      "execute_command": "echo 'vagrant' | sudo -S sh '{{.Path}}'",
+
+      "only": ["virtualbox-iso"]
+    },
+    {
+      "type": "chef-solo",
+
+      "install_command": "wget -O- https://www.opscode.com/chef/install.sh | sudo bash",
+
+      "cookbook_paths": ["cookbooks"],
+      "data_bags_path": "data_bags",
+
+      "run_list": [
+        "ubuntu",
+        "ntp",
+        "git",
+        "zsh",
+        "vim",
+        "vslinko::user",
+        "vslinko::home",
+        "nodejs_project"
+      ],
+
+      "json": {
+        "ubuntu": {
+          "archive_url": "http://ru.archive.ubuntu.com/ubuntu"
+        },
+        "ntp": {
+          "servers": ["0.ru.pool.ntp.org", "1.ru.pool.ntp.org", "2.ru.pool.ntp.org"]
+        },
+        "vslinko": {
+          "user": "vagrant",
+          "group": "vagrant",
+          "home": "/home/vagrant"
+        },
+        "nodejs_project": {
+          "project_name": "{%= name %}",
+          "repository": "git@github.com:{%= github_repo %}.git",
+          "dir": "/home/vagrant/{%= name %}",
+          "user": "vagrant",
+          "group": "vagrant",
+          "packages": {%= packages_json_array %},
+          "build_system": "{%= build_system %}",
+          "build_dir": "{%= build_dir %}",
+          "env": "development"
+        }
+      },
+
+      "only": ["virtualbox-iso"]
+    },
+    {
+      "type": "shell",
+
+      "script": "lib/scripts/virtualbox-iso-cleanup.sh",
+
+      "execute_command": "echo 'vagrant' | sudo -S sh '{{.Path}}'",
+
+      "only": ["virtualbox-iso"]
+    },
+    {
+      "type": "chef-solo",
+
+      "install_command": "wget -O- https://www.opscode.com/chef/install.sh | sudo bash",
+
+      "cookbook_paths": ["cookbooks"],
+      "data_bags_path": "data_bags",
+
+      "run_list": [
+        "apt",
+        "ufw",
+        "fail2ban",
+        "ntp",
+        "git",
+        "zsh",
+        "vim",
+        "vslinko",
+        "nodejs_project"
+      ],
+
+      "json": {
+        "firewall": {
+          "rules": [
+            {"http": {
+              "port": 80,
+              "protocol": "tcp"
+            }}
+          ]
+        },
+        "ntp": {
+          "servers": ["0.nl.pool.ntp.org", "1.nl.pool.ntp.org", "0.de.pool.ntp.org"]
+        },
+        "nodejs_project": {
+          "project_name": "{%= name %}",
+          "repository": "git@github.com:{%= github_repo %}.git",
+          "packages": {%= packages_json_array %},
+          "build_system": "{%= build_system %}",
+          "build_dir": "{%= build_dir %}"
+        }
+      },
+
+      "only": ["digitalocean"]
+    }
+  ],
+
+  "post-processors": [
+    {
+      "type": "vagrant",
+
+      "only": ["virtualbox-iso"]
+    }
+  ]
+}

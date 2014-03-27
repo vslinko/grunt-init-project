@@ -1,0 +1,6 @@
+Vagrant.configure("2") do |config|
+  config.vm.network :private_network, ip: "{%= ip_address %}"
+
+  config.vm.box = "{%= name %}"
+  config.vm.box_url = "./packer_virtualbox-iso_virtualbox.box"
+end
