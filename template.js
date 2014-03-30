@@ -14,7 +14,9 @@ module.exports = {
       init.prompt('build_dir', ''),
       init.prompt('ip_address', '10.10.10.10')
     ], function(err, props) {
-      props['packages_json_array'] = JSON.stringify(props.packages.split(/\s+/));
+      props['packages_json_array'] = JSON.stringify(props.packages.split(/\s+/).filter(function(p) {
+        return p.length > 0;
+      }));
       init.copyAndProcess(init.filesToCopy(props), props);
       fs.chmodSync(props.name + '_manager', 0755);
       callback();
